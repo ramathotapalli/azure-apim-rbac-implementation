@@ -1,0 +1,53 @@
+parameters:
+  - name: azureSubscription
+    displayName: Azure Subscription Service Connection
+    type: string
+  - name: resourceGroup
+    type: string
+    displayName: Resource Group
+  - name: scriptPath
+    type: string
+    displayName: Script Path Prefix (Optional)
+    default: 'apim-rbac/lock-management/scripts/' # Hardcoded default value
+
+jobs:
+  - job: ManageLocks
+    displayName: 'Manage Resource Group Locks'
+    steps:
+      - task: AzureCLI@2
+        displayName: 'Install Dependencies'
+        inputs:
+          azureSubscription: '${{ parameters.azureSubscription }}'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            sudo apt-get update
+            sudo apt-get install -y jq dos2unix
+            dos2unix "${{ parameters.scriptPath }}manage-locks-script.sh"
+            chmod +x "${{ parameters.scriptPath }}manage-locks-script.sh"
+
+      - task: AzureCLI@2
+        name: IdentifyLocksStep
+        displayName: 'Identify Locks'
+        inputs:
+          azureSubscription: '${{ parameters.azureSubscription }}'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            # Identify locks first to capture the JSON data
+            lockData=$(./"${{ parameters.scriptPath }}manage-locks-script.sh" identify '${{ parameters.resourceGroup }}')
+            echo "Lock data identified: $lockData"
+
+            # Save the locks data as an output variable for other stages/jobs
+            echo "##vso[task.setvariable variable=locksJson;isOutput=true]$lockData"
+
+      - task: AzureCLI@2
+        displayName: 'Remove Locks'
+        condition: and(not(eq(variables['IdentifyLocksStep.locksJson'], '')), not(eq(variables['IdentifyLocksStep.locksJson'], 'null')), not(eq(variables['IdentifyLocksStep.locksJson'], '[]')))
+        inputs:
+          azureSubscription: '${{ parameters.azureSubscription }}'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            # Run the remove operation
+            ./"${{ parameters.scriptPath }}manage-locks-script.sh" remove '${{ parameters.resourceGroup }}'

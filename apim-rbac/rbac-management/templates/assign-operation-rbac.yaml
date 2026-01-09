@@ -1,0 +1,69 @@
+parameters:
+  - name: subscriptionId
+    type: string
+    displayName: Subscription ID
+
+  - name: azureSubscription
+    displayName: Azure Subscription Service Connection
+    type: string
+
+  - name: resourceGroup
+    type: string
+    displayName: Resource Group
+
+  - name: apimInstance
+    type: string
+    displayName: API Management Instance
+
+  - name: userEmail
+    type: string
+    displayName: User Email
+
+  - name: apiName
+    type: string
+    displayName: API Name
+
+  - name: operations
+    type: object
+    displayName: Operation Names
+
+  - name: scriptPath
+    type: string
+    displayName: Script Path Prefix (Optional)
+    default: 'apim-rbac/rbac-management/scripts/'
+
+steps:
+  - checkout: self
+
+  - task: AzureCLI@2
+    displayName: 'Install Dependencies'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        sudo apt-get update
+        sudo apt-get install -y jq dos2unix
+
+        # Fix line endings for operation scripts
+        dos2unix "${{ parameters.scriptPath }}assign-operation-roles.sh"
+        chmod +x "${{ parameters.scriptPath }}assign-operation-roles.sh"
+
+  - task: AzureCLI@2
+    displayName: 'Execute Operation-Specific RBAC Task'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Select subscription explicitly
+        az account set --subscription ${{ parameters.subscriptionId }}
+
+        # Execute the script with appropriate arguments
+        bash "${{ parameters.scriptPath }}assign-operation-roles.sh" \
+          '${{ parameters.subscriptionId }}' \
+          '${{ parameters.resourceGroup }}' \
+          '${{ parameters.apimInstance }}' \
+          '${{ parameters.userEmail }}' \
+          '${{ parameters.apiName }}' \
+          '${{ convertToJson(parameters.operations) }}'

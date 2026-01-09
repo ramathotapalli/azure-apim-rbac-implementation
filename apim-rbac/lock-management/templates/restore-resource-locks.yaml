@@ -1,0 +1,46 @@
+parameters:
+  - name: azureSubscription
+    displayName: Azure Subscription Service Connection
+    type: string
+
+  - name: resourceGroup
+    type: string
+    displayName: Resource Group
+
+  - name: locksJson
+    type: string
+    default: '[]'
+    displayName: Locks JSON Data
+
+  - name: scriptPath
+    type: string
+    displayName: Script Path Prefix (Optional)
+    default: 'apim-rbac/lock-management/scripts/'
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Install Dependencies'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        sudo apt-get update
+        sudo apt-get install -y jq dos2unix
+        dos2unix "${{ parameters.scriptPath }}restore-locks-script.sh"
+        chmod +x "${{ parameters.scriptPath }}restore-locks-script.sh"
+
+  - task: AzureCLI@2
+    displayName: 'Recreate Locks'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        if [[ -z "${{ parameters.locksJson }}" || "${{ parameters.locksJson }}" == "null" || "${{ parameters.locksJson }}" == "[]" ]]; then
+          echo "No locks found in 'locksJson' parameter. Skipping lock recreation."
+        else
+          # Execute the recreate locks script
+          ./"${{ parameters.scriptPath }}restore-locks-script.sh" '${{ parameters.resourceGroup }}' '${{ parameters.locksJson }}'
+          echo "Locks have been recreated for resource group: ${{ parameters.resourceGroup }}"
+        fi

@@ -1,0 +1,59 @@
+parameters:
+  - name: subscriptionId
+    type: string
+    displayName: Subscription ID # Parameter for the Azure subscription ID.
+
+  - name: azureSubscription
+    displayName: Azure Subscription Service Connection
+    type: string
+
+  - name: apimInstance
+    type: string
+    displayName: API Management Instance # Parameter for the API Management instance name.
+
+  - name: userEmail
+    type: string
+    displayName: User Email # Parameter for the user's email.
+
+  - name: rolesToDelete
+    type: object
+    #default: ['API Management Service Reader Role', 'ApiRole-user/group-APIs']
+    displayName: Roles to Delete # Parameter for the list of roles to delete (built-in or custom).
+
+  - name: scriptPath
+    type: string
+    displayName: Script Path Prefix (Optional)
+    default: 'apim-rbac/rbac-management/scripts/'
+
+steps:
+  - checkout: self # Checks out the source code repository.
+
+  # Install dependencies and fix line endings for all scripts
+  - bash: |
+      sudo apt-get update
+      sudo apt-get install -y jq dos2unix
+
+      echo "Working Directory: $(Build.SourcesDirectory)"
+      ls -la $(Build.SourcesDirectory)
+
+      # Fix line endings for Role Deletion script
+      dos2unix "${{ parameters.scriptPath }}remove-definitions-and-roles.sh"
+      chmod +x "${{ parameters.scriptPath }}remove-definitions-and-roles.sh"
+    displayName: 'Install Dependencies and Fix Line Endings'
+
+  # Execute Role Deletion Task
+  - task: AzureCLI@2
+    name: RoleDeletionStep
+    displayName: 'Manage Azure RBAC Roles for User'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Select subscription explicitly
+        az account set --subscription ${{ parameters.subscriptionId }}
+
+        # Execute script with full error output
+        bash "${{ parameters.scriptPath }}remove-definitions-and-roles.sh" \
+          '${{ parameters.userEmail }}' \
+          '${{ convertToJson(parameters.rolesToDelete) }}'
