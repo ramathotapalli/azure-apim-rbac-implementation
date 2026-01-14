@@ -1,0 +1,47 @@
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: rbac-management-variables
+
+parameters:
+  - name: userEmail
+    type: string
+    default: 'user.1@abc.com'
+    displayName: User(Dot one Account) Email or Group Name
+  - name: apiName
+    type: string
+    displayName: API Name
+  - name: operations
+    type: object
+    displayName: Operation Names
+
+stages:
+  - stage: RBACManagement
+    displayName: 'Assign RBAC Roles for API Operations'
+    jobs:
+      - job: ExecuteRBACManagement
+        displayName: 'Execute RBAC Role Assignment for API Operations'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'List Resources in Resource Group'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az resource list --resource-group $(resourceGroup) --output table
+
+          # Core RBAC assignment for API operations
+          - template: /apim-rbac/rbac-management/templates/assign-operation-rbac.yaml
+            parameters:
+              subscriptionId: $(subscriptionId)
+              azureSubscription: $(azureSubscription)
+              resourceGroup: $(resourceGroup)
+              apimInstance: $(apimInstance)
+              userEmail: '${{ parameters.userEmail }}'
+              apiName: ${{ parameters.apiName }}
+              operations: ${{ parameters.operations }}
