@@ -1,0 +1,42 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: rbac-management-variables
+
+parameters:
+  - name: userEmail
+    type: string
+    default: 'user.1@abc.com'
+    displayName: User(Dot one Account) Email or Group Name
+  - name: apiNames
+    type: object
+    default: []
+    displayName: API Names
+
+stages:
+  - stage: RBACManagement
+    displayName: 'RBAC Role Assignment'
+    jobs:
+      - job: ExecuteRBACManagement
+        displayName: 'Execute RBAC Role Assignment for API'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'Execute RBAC Role Assignment for API'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az resource list --resource-group $(resourceGroup) --output table
+
+          - template: /apim-rbac/rbac-management/templates/assign-api-rbac.yaml
+            parameters:
+              subscriptionId: $(subscriptionId)
+              azureSubscription: $(azureSubscription)
+              resourceGroup: $(resourceGroup)
+              apimInstance: $(apimInstance)
+              userEmail: '${{ parameters.userEmail }}'
+              apiNames: ${{ parameters.apiNames }}
