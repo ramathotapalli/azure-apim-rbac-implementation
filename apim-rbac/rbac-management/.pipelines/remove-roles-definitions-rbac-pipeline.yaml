@@ -1,0 +1,44 @@
+
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: rbac-management-variables
+
+parameters:
+  - name: userEmail
+    type: string
+    default: 'user.1@abc.com'
+    displayName: User(Dot one Account) Email or Group Name
+
+  - name: rolesToDelete
+    type: object
+    default: ['API Management Service Reader Role', 'ApiRole-user/group-name-APIs']
+    displayName: Roles to Delete # Built-in or custom roles to remove
+
+stages:
+  - stage: RBACManagement
+    displayName: 'Remove RBAC Role Assignment'
+    jobs:
+      - job: ExecuteRBACManagement
+        displayName: 'Remove Role Assignment and Definitions'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'List Resources in Resource Group'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az resource list --resource-group $(resourceGroup) --output table
+
+          # Core removal of role assignments & custom definitions for the provided user/group
+          - template: /apim-rbac/rbac-management/templates/remove-roles-definitions-rbac.yaml
+            parameters:
+              subscriptionId: $(subscriptionId)
+              azureSubscription: $(azureSubscription)
+              apimInstance: $(apimInstance)
+              userEmail: '${{ parameters.userEmail }}'
+              rolesToDelete: ${{ parameters.rolesToDelete }}
